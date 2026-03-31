@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code 源码深度分析报告</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0e17;--bg2:#111827;--bg3:#1a2236;--bg4:#243049;
+  --text:#e2e8f0;--text2:#94a3b8;--text3:#64748b;
+  --cyan:#67e8f9;--teal:#5eead4;--emerald:#6ee7b7;
+  --amber:#fbbf24;--rose:#fb7185;--violet:#a78bfa;--blue:#60a5fa;
+  --orange:#fb923c;
+  --border:#1e293b;--border2:#334155;
+  --glow:0 0 40px rgba(103,232,249,.08);
+  --radius:12px;--radius-lg:20px;
+  --font-mono:'SF Mono','Cascadia Code','Fira Code',monospace;
+  --font-sans:-apple-system,'Inter','Segoe UI',sans-serif;
+  --ease:cubic-bezier(.16,1,.3,1);
+}
+html{scroll-behavior:smooth;font-size:16px}
+body{
+  background:var(--bg);color:var(--text);
+  font-family:var(--font-sans);line-height:1.7;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:rgba(103,232,249,.2);color:#fff}
+
+/* Layout */
+.container{max-width:1200px;margin:0 auto;padding:0 24px}
+section{padding:80px 0}
+section:nth-child(even){background:var(--bg2)}
+
+/* Hero */
+.hero{
+  min-height:100vh;display:flex;align-items:center;justify-content:center;
+  position:relative;overflow:hidden;
+  background:radial-gradient(ellipse 80% 60% at 50% 40%,rgba(103,232,249,.06),transparent),
+             radial-gradient(ellipse 60% 50% at 80% 20%,rgba(167,139,250,.04),transparent),
+             var(--bg);
+}
+.hero::before{
+  content:'';position:absolute;inset:0;
+  background:url("data:image/svg+xml,%3Csvg width='60' height='60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 30h60M30 0v60' stroke='%23ffffff' stroke-opacity='.03' stroke-width='.5'/%3E%3C/svg%3E");
+}
+.hero-content{position:relative;text-align:center;max-width:900px;padding:40px 24px}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:6px 16px;border-radius:999px;
+  background:rgba(103,232,249,.08);border:1px solid rgba(103,232,249,.2);
+  color:var(--cyan);font-size:.8rem;letter-spacing:.05em;
+  text-transform:uppercase;margin-bottom:32px;
+}
+.hero-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--cyan);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.hero h1{
+  font-size:clamp(2.5rem,6vw,4.5rem);font-weight:800;
+  line-height:1.1;letter-spacing:-.03em;
+  background:linear-gradient(135deg,#fff 0%,var(--cyan) 50%,var(--teal) 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  margin-bottom:24px;
+}
+.hero-sub{font-size:clamp(1rem,2vw,1.3rem);color:var(--text2);max-width:700px;margin:0 auto 48px}
+.hero-stats{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:16px;
+  max-width:800px;margin:0 auto;
+}
+.stat-card{
+  background:rgba(255,255,255,.03);border:1px solid var(--border);
+  border-radius:var(--radius);padding:20px 16px;
+  transition:all .3s var(--ease);
+}
+.stat-card:hover{border-color:var(--cyan);box-shadow:var(--glow);transform:translateY(-2px)}
+.stat-num{font-size:1.8rem;font-weight:800;font-family:var(--font-mono);color:#fff}
+.stat-label{font-size:.75rem;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-top:4px}
+
+/* Section Headers */
+.section-header{text-align:center;margin-bottom:60px}
+.section-tag{
+  display:inline-block;padding:4px 14px;border-radius:999px;
+  font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;
+  margin-bottom:16px;
+}
+.section-tag.cyan{background:rgba(103,232,249,.1);color:var(--cyan);border:1px solid rgba(103,232,249,.2)}
+.section-tag.violet{background:rgba(167,139,250,.1);color:var(--violet);border:1px solid rgba(167,139,250,.2)}
+.section-tag.emerald{background:rgba(110,231,183,.1);color:var(--emerald);border:1px solid rgba(110,231,183,.2)}
+.section-tag.amber{background:rgba(251,191,36,.1);color:var(--amber);border:1px solid rgba(251,191,36,.2)}
+.section-tag.rose{background:rgba(251,113,133,.1);color:var(--rose);border:1px solid rgba(251,113,133,.2)}
+.section-tag.blue{background:rgba(96,165,250,.1);color:var(--blue);border:1px solid rgba(96,165,250,.2)}
+.section-title{font-size:clamp(1.8rem,4vw,2.8rem);font-weight:700;letter-spacing:-.02em;margin-bottom:12px}
+.section-desc{color:var(--text2);max-width:600px;margin:0 auto;font-size:1.05rem}
+
+/* Cards Grid */
+.cards{display:grid;gap:20px}
+.cards-2{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
+.cards-3{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.card{
+  background:var(--bg3);border:1px solid var(--border);
+  border-radius:var(--radius-lg);padding:28px;
+  transition:all .3s var(--ease);position:relative;overflow:hidden;
+}
+.card:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:var(--glow)}
+.card-icon{
+  width:44px;height:44px;border-radius:12px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.3rem;margin-bottom:16px;
+}
+.card-icon.cyan{background:rgba(103,232,249,.1);color:var(--cyan)}
+.card-icon.violet{background:rgba(167,139,250,.1);color:var(--violet)}
+.card-icon.emerald{background:rgba(110,231,183,.1);color:var(--emerald)}
+.card-icon.amber{background:rgba(251,191,36,.1);color:var(--amber)}
+.card-icon.rose{background:rgba(251,113,133,.1);color:var(--rose)}
+.card-icon.blue{background:rgba(96,165,250,.1);color:var(--blue)}
+.card-icon.orange{background:rgba(251,146,60,.1);color:var(--orange)}
+.card h3{font-size:1.15rem;font-weight:600;margin-bottom:8px;color:#fff}
+.card p{color:var(--text2);font-size:.9rem;line-height:1.6}
+.card .tag{
+  display:inline-block;padding:2px 8px;border-radius:6px;
+  font-size:.7rem;font-family:var(--font-mono);margin-top:12px;
+  background:rgba(255,255,255,.05);color:var(--text3);
+}
+
+/* Architecture Diagram */
+.arch-diagram{
+  background:var(--bg3);border:1px solid var(--border);
+  border-radius:var(--radius-lg);padding:40px;margin:40px 0;
+  overflow-x:auto;
+}
+.arch-flow{
+  display:flex;align-items:stretch;gap:4px;min-width:700px;
+  justify-content:center;flex-wrap:nowrap;
+}
+.arch-node{
+  flex:1;min-width:100px;max-width:180px;
+  background:var(--bg4);border:1px solid var(--border2);
+  border-radius:var(--radius);padding:16px 12px;text-align:center;
+  position:relative;transition:all .3s var(--ease);
+}
+.arch-node:hover{border-color:var(--cyan);box-shadow:var(--glow)}
+.arch-node .icon{font-size:1.5rem;margin-bottom:8px}
+.arch-node .name{font-size:.8rem;font-weight:600;color:#fff;margin-bottom:4px}
+.arch-node .desc{font-size:.65rem;color:var(--text3);line-height:1.4}
+.arch-arrow{
+  display:flex;align-items:center;color:var(--text3);font-size:1.2rem;
+  flex-shrink:0;padding:0 2px;
+}
+
+/* Table */
+.data-table{width:100%;border-collapse:collapse;margin:24px 0;font-size:.88rem}
+.data-table th{
+  text-align:left;padding:12px 16px;font-size:.7rem;
+  text-transform:uppercase;letter-spacing:.08em;color:var(--text3);
+  border-bottom:1px solid var(--border);background:var(--bg3);
+}
+.data-table td{padding:12px 16px;border-bottom:1px solid var(--border);color:var(--text2)}
+.data-table tr:hover td{background:rgba(103,232,249,.02)}
+.data-table .mono{font-family:var(--font-mono);font-size:.8rem;color:var(--cyan)}
+.data-table .num{font-family:var(--font-mono);font-weight:600;color:#fff;text-align:right}
+.data-table .bar{
+  height:6px;border-radius:3px;background:var(--bg4);min-width:60px;
+  position:relative;overflow:hidden;
+}
+.data-table .bar-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--cyan),var(--teal))}
+
+/* Collapsible */
+details{
+  background:var(--bg3);border:1px solid var(--border);
+  border-radius:var(--radius);margin:12px 0;overflow:hidden;
+}
+details[open]{border-color:var(--border2)}
+summary{
+  padding:16px 20px;cursor:pointer;font-weight:600;
+  display:flex;align-items:center;gap:10px;
+  transition:background .2s;list-style:none;
+}
+summary::-webkit-details-marker{display:none}
+summary::before{content:'>';font-family:var(--font-mono);color:var(--cyan);transition:transform .2s;font-size:.9rem}
+details[open] summary::before{transform:rotate(90deg)}
+summary:hover{background:rgba(255,255,255,.02)}
+.details-content{padding:0 20px 20px;color:var(--text2);font-size:.9rem;line-height:1.7}
+.details-content code{
+  font-family:var(--font-mono);font-size:.82rem;
+  background:rgba(103,232,249,.08);color:var(--cyan);
+  padding:2px 6px;border-radius:4px;
+}
+
+/* Code Block */
+pre{
+  background:var(--bg);border:1px solid var(--border);
+  border-radius:var(--radius);padding:20px;margin:16px 0;
+  overflow-x:auto;font-family:var(--font-mono);font-size:.8rem;
+  line-height:1.6;color:var(--text2);
+}
+pre .kw{color:var(--violet)}
+pre .fn{color:var(--blue)}
+pre .str{color:var(--emerald)}
+pre .cm{color:var(--text3)}
+pre .type{color:var(--cyan)}
+pre .num{color:var(--amber)}
+
+/* Highlight Box */
+.highlight-box{
+  background:linear-gradient(135deg,rgba(103,232,249,.05),rgba(167,139,250,.05));
+  border:1px solid rgba(103,232,249,.15);border-left:3px solid var(--cyan);
+  border-radius:0 var(--radius) var(--radius) 0;
+  padding:20px 24px;margin:24px 0;
+}
+.highlight-box.warn{
+  border-left-color:var(--amber);
+  background:linear-gradient(135deg,rgba(251,191,36,.05),rgba(251,146,60,.03));
+  border-color:rgba(251,191,36,.15);
+}
+.highlight-box .title{font-weight:700;color:#fff;margin-bottom:6px;font-size:.95rem}
+.highlight-box p{color:var(--text2);font-size:.88rem}
+
+/* Badge */
+.badge{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:3px 10px;border-radius:6px;font-size:.72rem;
+  font-weight:600;font-family:var(--font-mono);
+}
+.badge.green{background:rgba(110,231,183,.12);color:var(--emerald)}
+.badge.yellow{background:rgba(251,191,36,.12);color:var(--amber)}
+.badge.red{background:rgba(251,113,133,.12);color:var(--rose)}
+.badge.blue{background:rgba(96,165,250,.12);color:var(--blue)}
+.badge.purple{background:rgba(167,139,250,.12);color:var(--violet)}
+
+/* Meter */
+.meter{display:flex;align-items:center;gap:12px;margin:8px 0}
+.meter-bar{flex:1;height:8px;background:var(--bg4);border-radius:4px;overflow:hidden}
+.meter-fill{height:100%;border-radius:4px;transition:width .6s var(--ease)}
+.meter-label{font-size:.75rem;color:var(--text3);min-width:50px;text-align:right;font-family:var(--font-mono)}
+
+/* Nav */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  background:rgba(10,14,23,.85);backdrop-filter:blur(16px);
+  border-bottom:1px solid var(--border);
+  padding:0 24px;height:56px;display:flex;align-items:center;
+  transition:transform .3s var(--ease);
+}
+nav .logo{font-weight:800;font-size:1rem;color:#fff;letter-spacing:-.02em}
+nav .logo span{color:var(--cyan)}
+nav ul{display:flex;gap:4px;margin-left:auto;list-style:none}
+nav a{
+  color:var(--text3);text-decoration:none;font-size:.78rem;
+  padding:6px 12px;border-radius:8px;transition:all .2s;
+}
+nav a:hover{color:var(--text);background:rgba(255,255,255,.05)}
+
+/* Footer */
+footer{
+  padding:60px 24px;text-align:center;
+  border-top:1px solid var(--border);color:var(--text3);font-size:.85rem;
+}
+footer .brand{font-size:1.5rem;font-weight:800;margin-bottom:12px}
+footer .brand span{color:var(--cyan)}
+
+/* Scroll animations */
+.fade-up{opacity:0;transform:translateY(24px);transition:all .6s var(--ease)}
+.fade-up.visible{opacity:1;transform:translateY(0)}
+
+/* Responsive */
+@media(max-width:768px){
+  .hero-stats{grid-template-columns:repeat(2,1fr)}
+  .cards-2,.cards-3{grid-template-columns:1fr}
+  .arch-flow{flex-direction:column;min-width:auto;align-items:center}
+  .arch-arrow{transform:rotate(90deg)}
+  nav ul{display:none}
+  section{padding:48px 0}
+}
+</style>
+</head>
+<body>
+
+<!-- Navigation -->
+<nav>
+  <div class="logo">Claude<span>Code</span></div>
+  <ul>
+    <li><a href="#overview">概览</a></li>
+    <li><a href="#architecture">架构</a></li>
+    <li><a href="#modules">模块</a></li>
+    <li><a href="#tools">工具系统</a></li>
+    <li><a href="#security">安全模型</a></li>
+    <li><a href="#patterns">设计模式</a></li>
+    <li><a href="#insights">核心洞察</a></li>
+  </ul>
+</nav>
+
+<!-- Hero -->
+<section class="hero" id="overview">
+  <div class="hero-content">
+    <div class="hero-badge"><span class="dot"></span>Leaked Source Analysis &mdash; 2026-03-31</div>
+    <h1>Claude Code<br>Source Code<br>Deep Analysis</h1>
+    <p class="hero-sub">Anthropic 官方 CLI 工具完整源码的上市公司级技术审计报告。1,884 个文件、512,664 行 TypeScript 代码的六维深度剖析。</p>
+    <div class="hero-stats">
+      <div class="stat-card"><div class="stat-num">512K+</div><div class="stat-label">Lines of Code</div></div>
+      <div class="stat-card"><div class="stat-num">1,884</div><div class="stat-label">Source Files</div></div>
+      <div class="stat-card"><div class="stat-num">60+</div><div class="stat-label">Built-in Tools</div></div>
+      <div class="stat-card"><div class="stat-num">87</div><div class="stat-label">Custom Hooks</div></div>
+      <div class="stat-card"><div class="stat-num">50+</div><div class="stat-label">Slash Commands</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- Tech Stack -->
+<section>
+  <div class="container">
+    <div class="section-header">
+      <span class="section-tag cyan">Tech Stack</span>
+      <h2 class="section-title">技术栈概览</h2>
+      <p class="section-desc">Claude Code 是一个高度工程化的 CLI 应用，运行在 Bun 上，使用 React 驱动终端 UI</p>
+    </div>
+    <div class="cards cards-3">
+      <div class="card">
+        <div class="card-icon cyan">&#x26A1;</div>
+        <h3>Runtime: Bun</h3>
+        <p>基于 Zig 的高性能 JavaScript 运行时，内置 bundler 和 test runner。利用 Bun 的 wyhash 实现 100x 快速哈希。</p>
+        <span class="tag">bun:bundle + feature() dead code elimination</span>
+      </div>
+      <div class="card">
+        <div class="card-icon violet">&#x2B22;</div>
+        <h3>UI: React + Ink</h3>
+        <p>定制的 Ink 渲染器（非标准开源版），集成 React Compiler。346 个 .tsx 组件，Yoga 布局引擎直出终端。</p>
+        <span class="tag">React Compiler + Yoga Flexbox</span>
+      </div>
+      <div class="card">
+        <div class="card-icon emerald">&#x1F310;</div>
+        <h3>API: Anthropic SDK</h3>
+        <p>多提供商支持 &mdash; Anthropic Direct / AWS Bedrock / Azure Foundry / Vertex AI。流式优先，提示词缓存。</p>
+        <span class="tag">4 providers + streaming + prompt caching</span>
+      </div>
+      <div class="card">
+        <div class="card-icon amber">&#x1F527;</div>
+        <h3>Type Safety: TypeScript + Zod</h3>
+        <p>全量 TypeScript strict 模式。Zod 运行时校验工具输入、配置、Hook 输出。DeepImmutable 强制不可变更新。</p>
+        <span class="tag">Zod v4 + DeepImmutable&lt;T&gt;</span>
+      </div>
+      <div class="card">
+        <div class="card-icon rose">&#x1F6E1;</div>
+        <h3>Security: Multi-layer</h3>
+        <p>四层信任边界、8 源权限继承、AST 级安全分析、SSRF 防护、沙箱隔离。企业级安全架构。</p>
+        <span class="tag">sandbox + classifier + SSRF guard</span>
+      </div>
+      <div class="card">
+        <div class="card-icon blue">&#x1F4E6;</div>
+        <h3>Protocol: MCP + LSP</h3>
+        <p>Model Context Protocol 0.13.1 集成，支持 Stdio/SSE/WebSocket/HTTP 四种传输。Language Server Protocol 工具支持。</p>
+        <span class="tag">MCP 0.13.1 + LSP integration</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Architecture -->
+<section id="architecture">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-tag violet">Architecture</span>
+      <h2 class="section-title">核心架构</h2>
+      <p class="section-desc">从用户输入到 AI 响应的完整数据流</p>
+    </div>
+
+    <div class="arch-diagram">
+      <div class="arch-flow">
+        <div class="arch-node">
+          <div class="icon">&#x2328;</div>
+          <div class="name">User Input</div>
+          <div class="desc">CLI / IDE Bridge / Remote Session</div>
+        </div>
+        <div class="arch-arrow">&rarr;</div>
+        <div class="arch-node">
+          <div class="icon">&#x2699;</div>
+          <div class="name">main.tsx</div>
+          <div class="desc">Commander.js 解析 + 初始化链</div>
+        </div>
+        <div class="arch-arrow">&rarr;</div>
+        <div class="arch-node">
+          <div class="icon">&#x1F9E0;</div>
+          <div class="name">QueryEngine</div>
+          <div class="desc">async function* 流式循环</div>
+        </div>
+        <div class="arch-arrow">&rarr;</div>
+        <div class="arch-node">
+          <div class="icon">&#x2601;</div>
+          <div class="name">Anthropic API</div>
+          <div class="desc">流式 + 提示词缓存 + 重试</div>
+        </div>
+        <div class="arch-arrow">&rarr;</div>
+        <div class="arch-node">
+          <div class="icon">&#x1F6E0;</div>
+          <div class="name">Tool Execution</div>
+          <div class="desc">权限检查 + 并发编排</div>
+        </div>
+        <div class="arch-arrow">&rarr;</div>
+        <div class="arch-node">
+          <div class="icon">&#x1F4BB;</div>
+          <div class="name">Ink Renderer</div>
+          <div class="desc">虚拟滚动 + 增量渲染</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="highlight-box">
+      <div class="title">&#x1F4A1; 核心设计哲学：流式优先（Streaming-First）</div>
+      <p>整个系统基于 TypeScript <code>async function*</code> 异步生成器构建。从 API 响应到工具执行到 UI 渲染，数据以流的形式逐步传递，实现最小延迟。工具在消息流入时即刻异步执行，不等待完整响应。</p>
+    </div>
+
+    <div class="cards cards-2" style="margin-top:32px">
+      <div class="card">
+        <div class="card-icon cyan">&#x1F504;</div>
+        <h3>Query 循环状态机</h3>
+        <p>核心 <code>query()</code> 函数是一个无限循环的异步生成器，管理消息准备 &rarr; API 调用 &rarr; 流式工具执行 &rarr; 状态转移的完整生命周期。支持 7 种终止原因：completed / prompt_too_long / max_turns / aborted 等。</p>
+      </div>
+      <div class="card">
+        <div class="card-icon violet">&#x1F6E1;</div>
+        <h3>三层权限模型</h3>
+        <p><strong>Layer 1</strong>：全局策略（5 种权限模式）。<strong>Layer 2</strong>：个别工具授权（8 源规则继承链）。<strong>Layer 3</strong>：SDK 审计追踪（permissionDenials 完整记录）。企业级可审计性。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Module Breakdown -->
+<section id="modules">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-tag emerald">Modules</span>
+      <h2 class="section-title">模块规模分布</h2>
+      <p class="section-desc">512,664 行代码在各核心模块间的分布</p>
+    </div>
+
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>模块</th>
+          <th>文件数</th>
+          <th style="text-align:right">代码行数</th>
+          <th style="min-width:200px">占比</th>
+          <th>核心职责</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="mono">utils/</td>
+          <td class="num">564</td>
+          <td class="num">180,472</td>
+          <td><div class="bar"><div class="bar-fill" style="width:100%"></div></div></td>
+          <td>工具函数库（30+ 功能域）</td>
+        </tr>
+        <tr>
+          <td class="mono">components/</td>
+          <td class="num">389</td>
+          <td class="num">81,546</td>
+          <td><div class="bar"><div class="bar-fill" style="width:45%"></div></div></td>
+          <td>Ink/React CLI 组件</td>
+        </tr>
+        <tr>
+          <td class="mono">services/</td>
+          <td class="num">130</td>
+          <td class="num">53,680</td>
+          <td><div class="bar"><div class="bar-fill" style="width:30%"></div></div></td>
+          <td>API / MCP / 压缩 / 分析</td>
+        </tr>
+        <tr>
+          <td class="mono">tools/</td>
+          <td class="num">184</td>
+          <td class="num">50,828</td>
+          <td><div class="bar"><div class="bar-fill" style="width:28%"></div></div></td>
+          <td>60+ 内置工具实现</td>
+        </tr>
+        <tr>
+          <td class="mono">commands/</td>
+          <td class="num">189</td>
+          <td class="num">26,428</td>
+          <td><div class="bar"><div class="bar-fill" style="width:15%"></div></div></td>
+          <td>50+ 斜杠命令</td>
+        </tr>
+        <tr>
+          <td class="mono">hooks/</td>
+          <td class="num">104</td>
+          <td class="num">19,204</td>
+          <td><div class="bar"><div class="bar-fill" style="width:11%"></div></div></td>
+          <td>87 个自定义 React Hooks</td>
+        </tr>
+        <tr>
+          <td class="mono">bridge/</td>
+          <td class="num">31</td>
+          <td class="num">12,613</td>
+          <td><div class="bar"><div class="bar-fill" style="width:7%"></div></div></td>
+          <td>VS Code / JetBrains IDE 集成</td>
+        </tr>
+        <tr>
+          <td class="mono">ink/</td>
+          <td class="num">50</td>
+          <td class="num">15,703</td>
+          <td><div class="bar"><div class="bar-fill" style="width:9%"></div></div></td>
+          <td>定制 Ink 渲染引擎</td>
+        </tr>
+        <tr>
+          <td class="mono">core files</td>
+          <td class="num">12</td>
+          <td class="num">11,592</td>
+          <td><div class="bar"><div class="bar-fill" style="width:6%"></div></div></td>
+          <td>main.tsx / QueryEngine / query.ts</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Tool System -->
+<section id="tools">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-tag amber">Tool System</span>
+      <h2 class="section-title">工具系统架构</h2>
+      <p class="section-desc">60+ 内置工具的类型安全、权限驱动执行框架</p>
+    </div>
+
+    <div class="cards cards-3">
+      <div class="card">
+        <div class="card-icon cyan">&#x1F4C1;</div>
+        <h3>文件操作（5 个）</h3>
+        <p>FileRead / FileEdit / FileWrite / NotebookEdit / Glob &mdash; 完整的文件系统操作集。读操作并发安全，写操作排他执行。</p>
+        <span class="badge green">ReadOnly=Concurrent</span>
+      </div>
+      <div class="card">
+        <div class="card-icon violet">&#x1F50D;</div>
+        <h3>搜索工具（2 个）</h3>
+        <p>Grep（ripgrep 驱动）+ ToolSearch（延迟加载搜索）。当工具数 > 40 时，ToolSearch 自动启用，节省 30-50% 初始 token。</p>
+        <span class="badge purple">Deferred Loading</span>
+      </div>
+      <div class="card">
+        <div class="card-icon amber">&#x1F4BB;</div>
+        <h3>执行工具（2+ 个）</h3>
+        <p>BashTool（Shell 命令执行）+ PowerShellTool（Windows）。多阶段安全验证：命令解析 &rarr; 只读检测 &rarr; 分类器 &rarr; 沙箱。</p>
+        <span class="badge yellow">Multi-stage Validation</span>
+      </div>
+      <div class="card">
+        <div class="card-icon emerald">&#x1F916;</div>
+        <h3>智能体工具（4 个）</h3>
+        <p>Agent（子代理生成）/ SendMessage（多代理通信）/ TeamCreate / TeamDelete。支持 sync / async / remote 三种模式。</p>
+        <span class="badge green">Multi-Agent</span>
+      </div>
+      <div class="card">
+        <div class="card-icon rose">&#x1F310;</div>
+        <h3>Web 工具（3 个）</h3>
+        <p>WebSearch（Anthropic 搜索 API）/ WebFetch（网页获取）/ WebBrowser（浏览器自动化）。预批准域白名单 + SSRF 防护。</p>
+        <span class="badge red">SSRF Protected</span>
+      </div>
+      <div class="card">
+        <div class="card-icon blue">&#x1F4CB;</div>
+        <h3>任务管理（5 个）</h3>
+        <p>TaskCreate / TaskGet / TaskList / TaskUpdate / TaskStop。7 种任务类型：local_bash / local_agent / remote_agent / teammate / workflow / monitor / dream。</p>
+        <span class="badge blue">7 Task Types</span>
+      </div>
+    </div>
+
+    <div class="highlight-box" style="margin-top:32px">
+      <div class="title">&#x1F512; Fail-Closed 并发策略</div>
+      <p>所有工具默认 <code>isConcurrencySafe: false</code>，必须显式声明为并发安全。这是安全优先的设计 &mdash; 新工具不会意外并发执行引发数据竞争。智能分区算法将读操作批量并行（最大 10 并发），写操作严格串行。</p>
+    </div>
+
+    <details style="margin-top:24px">
+      <summary>工具执行完整流程</summary>
+      <div class="details-content">
+        <pre>
+<span class="cm">// 完整执行链：query.ts → toolOrchestration.ts → toolExecution.ts</span>
+
+API 响应包含 ToolUseBlock[]
+    <span class="kw">↓</span>
+<span class="fn">partitionToolCalls</span>()           <span class="cm">// 并发分区：读并发/写串行</span>
+    <span class="kw">↓</span>
+<span class="fn">runToolUse</span>() <span class="kw">for each</span> block
+  <span class="kw">├─</span> <span class="fn">validateInput</span>()              <span class="cm">// Zod 参数校验</span>
+  <span class="kw">├─</span> <span class="fn">checkPermissions</span>()           <span class="cm">// 8 源规则 + 分类器 + Hook</span>
+  <span class="kw">├─</span> <span class="fn">runPreToolUseHooks</span>()         <span class="cm">// 用户自定义前置钩子</span>
+  <span class="kw">├─</span> <span class="fn">tool.call</span>()                  <span class="cm">// 实际执行</span>
+  <span class="kw">├─</span> <span class="fn">runPostToolUseHooks</span>()        <span class="cm">// 用户自定义后置钩子</span>
+  <span class="kw">└─</span> <span class="fn">mapToolResultToBlock</span>()       <span class="cm">// 结果序列化（5MB 预算限制）</span>
+    <span class="kw">↓</span>
+<span class="type">yield</span> MessageUpdate               <span class="cm">// 流式返回给 Query 循环</span></pre>
+      </div>
+    </details>
+
+    <details>
+      <summary>权限系统 8 源继承链</summary>
+      <div class="details-content">
+        <pre>
+<span class="cm">// 权限规则按优先级从高到低：</span>
+
+<span class="num">1.</span> <span class="type">policySettings</span>    <span class="cm">← 企业策略（最严格，不可覆写）</span>
+<span class="num">2.</span> <span class="type">userSettings</span>      <span class="cm">← ~/.claude/settings.json（持久）</span>
+<span class="num">3.</span> <span class="type">projectSettings</span>   <span class="cm">← .claude/settings.json（持久）</span>
+<span class="num">4.</span> <span class="type">localSettings</span>     <span class="cm">← .claude.local.json（持久）</span>
+<span class="num">5.</span> <span class="type">flagSettings</span>      <span class="cm">← 特性标志（持久）</span>
+<span class="num">6.</span> <span class="type">cliArg</span>            <span class="cm">← --allow/--deny（会话级）</span>
+<span class="num">7.</span> <span class="type">command</span>           <span class="cm">← /permissions 命令（会话级）</span>
+<span class="num">8.</span> <span class="type">session</span>           <span class="cm">← 运行时提示授权（临时）</span>
+
+<span class="cm">// 5 种权限模式：</span>
+<span class="str">'default'</span>          <span class="cm">← 标准：规则匹配 → ask → deny</span>
+<span class="str">'acceptEdits'</span>      <span class="cm">← 自动接受文件编辑</span>
+<span class="str">'plan'</span>             <span class="cm">← 计划模式：所有工具需确认</span>
+<span class="str">'dontAsk'</span>          <span class="cm">← 不提示：未允许即拒绝</span>
+<span class="str">'bypassPermissions'</span> <span class="cm">← 绕过（仅沙箱环境）</span></pre>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- Security -->
+<section id="security">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-tag rose">Security</span>
+      <h2 class="section-title">安全架构</h2>
+      <p class="section-desc">多层防御的企业级安全模型</p>
+    </div>
+
+    <div class="cards cards-2">
+      <div class="card">
+        <div class="card-icon rose">&#x1F6E1;</div>
+        <h3>四层信任边界</h3>
+        <p><strong>L1 用户</strong>（最高信任）&rarr; <strong>L2 Claude AI</strong>（条件授权）&rarr; <strong>L3 权限系统</strong>（可配置分级）&rarr; <strong>L4 命令引擎</strong>（多阶段验证）&rarr; <strong>系统资源</strong>（完全隔离）。每层独立验证。</p>
+      </div>
+      <div class="card">
+        <div class="card-icon amber">&#x1F525;</div>
+        <h3>沙箱隔离</h3>
+        <p>基于 <code>@anthropic-ai/sandbox-runtime</code> 的企业级沙箱：文件系统白名单写入 + 网络主机限制 + 命令排除列表。符号链接规范化防止路径遍历。</p>
+      </div>
+      <div class="card">
+        <div class="card-icon violet">&#x1F9E0;</div>
+        <h3>AST 级安全分析</h3>
+        <p>PowerShell 工具实现完整的抽象语法树分析 &mdash; 不是字符串匹配，而是深度解析。检测 Invoke-Expression、动态命令名、COM 对象滥用、Unicode 破折号替代。</p>
+      </div>
+      <div class="card">
+        <div class="card-icon blue">&#x1F310;</div>
+        <h3>SSRF 防护</h3>
+        <p>HTTP hooks 通过 <code>ssrfGuardedLookup</code> 进行 DNS 查询验证。阻断所有 RFC 1918 私有地址 + 云元数据端点（169.254.x.x）。含 IPv6-mapped-IPv4 检测。</p>
+      </div>
+      <div class="card">
+        <div class="card-icon emerald">&#x1F512;</div>
+        <h3>Git 逃逸防护</h3>
+        <p>检测裸仓库攻击（cwd 伪装为 .git）和 git-internal 写入 + hooks 注入的复合攻击。规范化 NTFS 特殊字符（尾部空格/点）。</p>
+      </div>
+      <div class="card">
+        <div class="card-icon orange">&#x1F511;</div>
+        <h3>凭证管理</h3>
+        <p>跨平台安全存储：macOS Keychain / Linux Secret Service / Windows Credential Manager。OAuth 2.0 + PKCE 流。信任设备令牌 90 天滚动过期。</p>
+      </div>
+    </div>
+
+    <div class="highlight-box warn" style="margin-top:32px">
+      <div class="title">&#x26A0; 安全审计发现：4 个关注点</div>
+      <p><strong>1. Auto 模式分类器可靠性</strong> &mdash; LLM 驱动的权限决策具有非确定性，边界情况可能误判。<strong>2. Hook 隔离</strong> &mdash; Hooks 运行在主进程中而非独立沙箱。<strong>3. Bash 解析边界</strong> &mdash; <code>splitCommand_DEPRECATED</code> 标签表明已知局限。<strong>4. 配置同步</strong> &mdash; 多源沙箱配置可能产生冲突。均为加固机会，非严重缺陷。</p>
+    </div>
+  </div>
+</section>
+
+<!-- UI System -->
+<section>
+  <div class="container">
+    <div class="section-header">
+      <span class="section-tag blue">UI System</span>
+      <h2 class="section-title">终端 UI 引擎</h2>
+      <p class="section-desc">React + 定制 Ink 渲染器驱动的高性能 CLI 界面</p>
+    </div>
+
+    <div class="cards cards-2">
+      <div class="card">
+        <div class="card-icon blue">&#x1F3A8;</div>
+        <h3>定制 Ink 渲染器</h3>
+        <p>非标准开源 Ink &mdash; 完全重写的渲染管线。React Compiler 自动优化。Yoga 布局引擎 + 增量差异渲染 + DECSTBM 硬件滚动优化。<code>layoutShifted</code> 追踪避免无效重绘。</p>
+        <span class="badge blue">15,703 lines custom Ink</span>
+      </div>
+      <div class="card">
+        <div class="card-icon cyan">&#x1F4DC;</div>
+        <h3>虚拟滚动</h3>
+        <p>VirtualMessageList 只渲染视口内消息。O(log n) 二分查找 + 高度缓存。10,000+ 消息列表零卡顿。"N new messages" 分割线基于 <code>useSyncExternalStore</code> 订阅滚动位置。</p>
+        <span class="badge green">O(visible) rendering</span>
+      </div>
+      <div class="card">
+        <div class="card-icon violet">&#x2328;</div>
+        <h3>完整 Vim 状态机</h3>
+        <p>代数式状态机：operator + count + motion + find + text object 全组合。INSERT / NORMAL 双模式 + 8 种子状态。PersistentState 记录最后动作，支持 <code>.</code> 重复。</p>
+        <span class="badge purple">Full Vim Motion</span>
+      </div>
+      <div class="card">
+        <div class="card-icon amber">&#x26A1;</div>
+        <h3>微任务批量渲染</h3>
+        <p><code>queueMicrotask</code> 合并同批次事件 &mdash; 10 个滚动事件合并为 1 次 Yoga 布局 + 1 次渲染。命令式滚动（<code>scrollBy</code>）绕过 React 状态更新，高频操作零开销。</p>
+        <span class="badge yellow">10 events &rarr; 1 render</span>
+      </div>
+    </div>
+
+    <details style="margin-top:24px">
+      <summary>87 个自定义 Hooks 分类</summary>
+      <div class="details-content">
+        <p><strong>核心 UI 状态（10 个）</strong>：useTypeahead（1384行，实时建议系统）/ useTerminalSize / useSearchInput / useInputBuffer</p>
+        <p><strong>交互/输入（15 个）</strong>：useGlobalKeybindings / useCommandKeybindings / useVoiceIntegration / useArrowKeyHistory / useDoublePress</p>
+        <p><strong>权限/工具（12 个）</strong>：useCanUseTool / useCancelRequest / useSwarmPermissionPoller / useCommandQueue</p>
+        <p><strong>业务逻辑（20 个）</strong>：useReplBridge（722行，IDE 集成）/ useMergedTools / useAssistantHistory / useVirtualScroll / useLogMessages</p>
+        <p><strong>通知系统（15 个）</strong>：useIDEStatusIndicator / useFastModeNotification / useLspInitializationNotification / useRateLimitWarningNotification</p>
+        <p><strong>其他（15 个）</strong>：useAfterFirstRender / useApiKeyVerification / useBlink（光标闪烁）/ useDeferredHookMessages / useElapsedTime</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- Design Patterns -->
+<section id="patterns">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-tag emerald">Design Patterns</span>
+      <h2 class="section-title">核心设计模式</h2>
+      <p class="section-desc">企业级工程实践的 12 个关键设计决策</p>
+    </div>
+
+    <div class="cards cards-2">
+      <div class="card">
+        <div class="card-icon cyan">&#x1F300;</div>
+        <h3>异步生成器驱动</h3>
+        <p>核心 <code>query()</code> 用 <code>async function*</code> 实现。流式处理（逐个 yield）/ 背压支持 / 错误传播 / 资源清理 / 中止控制 &mdash; 一个模式解决五个问题。</p>
+      </div>
+      <div class="card">
+        <div class="card-icon violet">&#x1F504;</div>
+        <h3>编译时特性门控</h3>
+        <p>Bun bundler 的 <code>feature()</code> 函数实现编译时死代码消除。KAIROS / COORDINATOR_MODE / REACTIVE_COMPACT 等特性在外部构建中完全移除。零运行时开销。</p>
+      </div>
+      <div class="card">
+        <div class="card-icon emerald">&#x1F4BE;</div>
+        <h3>分层缓存架构</h3>
+        <p><strong>L1</strong> LRU 内存缓存（固定大小）&rarr; <strong>L2</strong> TTL 缓存（后台刷新，stale-while-revalidate）&rarr; <strong>L3</strong> 文件监听（热更新强制刷新）。读多写少场景 100x 加速。</p>
+      </div>
+      <div class="card">
+        <div class="card-icon amber">&#x1F6E0;</div>
+        <h3>buildTool 工厂模式</h3>
+        <p>所有 60+ 工具通过 <code>buildTool()</code> 统一构建。Fail-closed 默认值 + Zod 输入校验 + 权限检查接口 + 并发声明 + UI 渲染钩子 = 一致的工具行为保证。</p>
+      </div>
+      <div class="card">
+        <div class="card-icon rose">&#x1F4E6;</div>
+        <h3>环形缓冲 UUID 去重</h3>
+        <p><code>BoundedUUIDSet</code> 用固定大小环形缓冲 + Set 实现 O(1) 添加/查询/内存。FIFO 驱逐最旧条目。解决 IDE Bridge 的消息回显和历史重放问题。</p>
+      </div>
+      <div class="card">
+        <div class="card-icon blue">&#x1F4CA;</div>
+        <h3>选择器式状态订阅</h3>
+        <p><code>useAppState(s => s.mainLoopModel)</code> 只在模型变化时重新渲染，而非整棵状态树变化。配合 <code>DeepImmutable&lt;T&gt;</code> 和 <code>Object.is</code> 比较，实现精确的渲染控制。</p>
+      </div>
+      <div class="card">
+        <div class="card-icon orange">&#x1F500;</div>
+        <h3>命令式 + 声明式混合</h3>
+        <p>ScrollBox 的高频滚动用命令式 <code>scrollBy()</code> 绕过 React。只在粘性状态变化时走 React 状态更新。双轨制：频繁操作零 React 开销，异常情况才触发重新渲染。</p>
+      </div>
+      <div class="card">
+        <div class="card-icon emerald">&#x1F510;</div>
+        <h3>权限决策可追踪</h3>
+        <p>每个权限决策都携带完整的 <code>PermissionDecisionReason</code> &mdash; 规则匹配 / 分类器决策 / Hook 拒绝 / 沙箱覆盖 / 安全检查。用户困惑时系统能清晰解释"为什么被拒绝"。</p>
+      </div>
+      <div class="card">
+        <div class="card-icon violet">&#x1F30D;</div>
+        <h3>多源技能加载</h3>
+        <p>6 个来源按优先级加载：project &rarr; user &rarr; policy &rarr; bundled &rarr; plugin &rarr; MCP。<code>realpath()</code> 符号链接感知去重。Frontmatter 轻量解析，内容按需加载。</p>
+      </div>
+      <div class="card">
+        <div class="card-icon rose">&#x2694;</div>
+        <h3>分级并发工具执行</h3>
+        <p>智能分区算法：连续只读工具合并为并发批次，遇到写工具则新建串行批次。最大并发 10（可配置）。<code>AbortController</code> 实现 Bash 错误时兄弟进程立即终止。</p>
+      </div>
+      <div class="card">
+        <div class="card-icon amber">&#x23F0;</div>
+        <h3>后台分叉代理模式</h3>
+        <p>会话记忆通过后台 subagent 异步生成，完全非阻塞。独立上下文、缓存安全参数、失败不影响主流程。写入 <code>~/.claude/sessions/{id}.md</code>。</p>
+      </div>
+      <div class="card">
+        <div class="card-icon blue">&#x1F4B0;</div>
+        <h3>三层成本管理</h3>
+        <p><strong>Global</strong>：累积会话成本（USD）+ 模型统计。<strong>Per-Turn</strong>：Token 预算追踪 + 自动压缩触发。<strong>Per-Request</strong>：maxBudgetUsd + maxTurns 限制。用户完全可见且可控。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Key Insights -->
+<section id="insights">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-tag amber">Key Insights</span>
+      <h2 class="section-title">核心洞察</h2>
+      <p class="section-desc">512,664 行代码中最值得学习的工程智慧</p>
+    </div>
+
+    <details>
+      <summary><span class="badge green">Architecture</span> 流式优先不是优化，是架构基因</summary>
+      <div class="details-content">
+        <p>Claude Code 的整个数据管线都基于 <code>async function*</code> 构建。这不是事后优化 &mdash; 是从第一天就决定的架构基因。从 API 流式响应 &rarr; 工具在流中即刻执行 &rarr; 结果逐个 yield &rarr; UI 增量渲染，每一层都是流式的。</p>
+        <p>这意味着用户看到第一个字符的延迟 = API 首字节延迟，而不是 API 完整响应延迟 + 工具执行延迟 + 渲染延迟。在长回复场景下，差异可能是秒级的。</p>
+      </div>
+    </details>
+
+    <details>
+      <summary><span class="badge purple">Security</span> 安全模型的"三权分立"</summary>
+      <div class="details-content">
+        <p>Claude Code 的安全架构实现了真正的三权分立：<strong>规则系统</strong>（宪法 &mdash; 不可逾越的硬约束）+ <strong>分类器</strong>（法官 &mdash; 基于上下文的灵活判断）+ <strong>用户提示</strong>（陪审团 &mdash; 最终人类决策）。</p>
+        <p>特别巧妙的是 <code>classifierApprovable</code> 字段：某些安全检查可以被分类器在看到完整上下文后批准（如编辑 .claude/settings.json），而另一些永远不能（如 Windows 路径绕过攻击）。这在自动化便利性和安全底线之间找到了精确的平衡点。</p>
+      </div>
+    </details>
+
+    <details>
+      <summary><span class="badge yellow">Performance</span> 命令式逃生舱是 React 的必修课</summary>
+      <div class="details-content">
+        <p>Claude Code 在 ScrollBox 中展示了一个重要的工程判断：不是所有 UI 更新都应该经过 React。高频滚动（每秒 60+ 事件）用命令式 <code>scrollRef.current.scrollBy(delta)</code> 直接修改，只在粘性状态变化这种低频异常时才走 React 状态更新。</p>
+        <p>配合 <code>queueMicrotask</code> 批量合并（10 个事件 &rarr; 1 次渲染），和 DECSTBM 硬件滚动优化（只发送滚动 delta 而非重绘整个视口），在终端环境中实现了流畅的 60 FPS 体验。</p>
+      </div>
+    </details>
+
+    <details>
+      <summary><span class="badge blue">Design</span> ToolSearch：当工具太多时的优雅降级</summary>
+      <div class="details-content">
+        <p>60+ 工具的完整 JSON Schema 会消耗大量初始 token。Claude Code 的解决方案很优雅：当工具数 > 40 时，只加载 4 个核心工具（Bash / FileRead / FileEdit / Agent），其余通过 ToolSearch 延迟发现。</p>
+        <p>AI 需要某个工具时，调用 <code>ToolSearch("keyword")</code>，系统返回匹配工具的完整 schema。代价是额外一轮 API 调用，收益是 30-50% 的初始 token 节省。这是典型的 "pay for what you use" 设计。</p>
+      </div>
+    </details>
+
+    <details>
+      <summary><span class="badge red">Innovation</span> 编译时特性门控 = 零成本可选功能</summary>
+      <div class="details-content">
+        <p>Bun bundler 的 <code>feature('KAIROS')</code> 在编译时求值。如果特性未启用，整个 <code>if</code> 块（包括 <code>require</code>）被完全移除 &mdash; 不是运行时跳过，是物理上从产出包中删除。</p>
+        <p>这让 Claude Code 可以在同一代码库中维护内部版本（ANT_ONLY 特性）和外部版本，零运行时开销。已发现的特性门控包括：KAIROS（助手模式）/ COORDINATOR_MODE（多代理）/ REACTIVE_COMPACT / HISTORY_SNIP / TOKEN_BUDGET / BG_SESSIONS 等。</p>
+      </div>
+    </details>
+
+    <details>
+      <summary><span class="badge green">Engineering</span> 遥测安全错误：强制 PII 审查的类型技巧</summary>
+      <div class="details-content">
+        <p>Claude Code 定义了一个故意名字很长的错误类：<code>TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS</code>。这不是代码风格问题 &mdash; 这是一种类型系统强制的 PII 审查机制。</p>
+        <p>每次创建这个错误时，开发者必须看到这个名字，被提醒"我验证了这不是代码或文件路径"。类似的还有 <code>AnalyticsMetadata_I_VERIFIED_THIS_IS_PII_TAGGED</code>。把合规检查编码进类型名，让"做对的事"成为编译器强制的行为。</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- Services Architecture -->
+<section>
+  <div class="container">
+    <div class="section-header">
+      <span class="section-tag violet">Services</span>
+      <h2 class="section-title">服务层架构</h2>
+      <p class="section-desc">IDE 桥接、远程会话、技能系统、多智能体协调</p>
+    </div>
+
+    <div class="cards cards-2">
+      <div class="card">
+        <div class="card-icon violet">&#x1F310;</div>
+        <h3>IDE Bridge 双协议</h3>
+        <p><strong>V1</strong>：HybridTransport（WebSocket 读 + HTTP POST 写）。<strong>V2</strong>：SSE 事件流 + CCR 异步批处理。统一的 <code>ReplBridgeTransport</code> 接口，会话无感知底层协议。序列号续接支持 SSE 回放恢复。</p>
+      </div>
+      <div class="card">
+        <div class="card-icon cyan">&#x1F9E9;</div>
+        <h3>多源技能系统</h3>
+        <p>6 个来源：<code>skills/</code>（用户）/ <code>bundled</code>（内置）/ <code>plugin</code> / <code>managed</code>（策略）/ <code>mcp</code> / <code>commands_DEPRECATED</code>。Frontmatter + Markdown 格式。支持 Hooks 前后钩子。</p>
+      </div>
+      <div class="card">
+        <div class="card-icon emerald">&#x1F916;</div>
+        <h3>多智能体协调器</h3>
+        <p><code>CLAUDE_CODE_COORDINATOR_MODE</code> 环境变量启用。Workers 拥有独立工具集（排除 SendMessage）。Scratchpad 目录实现跨 Worker 持久存储。系统提示自动注入可用能力描述。</p>
+      </div>
+      <div class="card">
+        <div class="card-icon amber">&#x1F5DC;</div>
+        <h3>三层上下文压缩</h3>
+        <p><strong>MicroCompact</strong>：每 N 条消息实时微压缩。<strong>AutoCompact</strong>：> 85% 上下文占用时自动触发。<strong>ContextManagement</strong>：API 级编辑策略（lossless / aggressive / balanced）。保留关键决策路径。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="container">
+    <div class="brand">Claude<span>Code</span> Analysis</div>
+    <p>Source Code Deep Analysis Report &mdash; 1,884 files, 512,664 lines of TypeScript</p>
+    <p style="margin-top:8px;color:var(--text3)">Analyzed by 6-agent parallel team &bull; Generated 2026-03-31</p>
+    <p style="margin-top:16px;font-size:.75rem;color:var(--text3)">
+      Core Architecture &bull; UI/Components &bull; Services/Infrastructure &bull; Tools/Commands &bull; Utils/Internals &bull; Security Model
+    </p>
+  </div>
+</footer>
+
+<!-- Scroll Animation -->
+<script>
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible') })
+}, { threshold: 0.1 });
+document.querySelectorAll('.card, .highlight-box, details').forEach(el => {
+  el.classList.add('fade-up');
+  observer.observe(el);
+});
+
+// Smooth nav hide on scroll
+let lastY = 0;
+window.addEventListener('scroll', () => {
+  const nav = document.querySelector('nav');
+  const y = window.scrollY;
+  nav.style.transform = y > 100 && y > lastY ? 'translateY(-100%)' : 'translateY(0)';
+  lastY = y;
+}, { passive: true });
+</script>
+
+</body>
+</html>
